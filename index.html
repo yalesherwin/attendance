@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>CHINACNU STEEL 员工打卡系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+  <style>
+    body {
+      font-family: "Arial", sans-serif;
+      background-color: #f4f6f8;
+      margin: 0;
+      padding: 10px;
+      text-align: center;
+    }
+    h1 {
+      color: #1a73e8;
+      font-size: 20px;
+    }
+    .card {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      max-width: 100%;
+      margin: 10px auto;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 16px;
+      font-size: 14px;
+      margin: 8px 4px;
+      cursor: pointer;
+      border-radius: 6px;
+      border: none;
+      background-color: #1a73e8;
+      color: white;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      overflow-x: auto;
+      display: block;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      font-size: 12px;
+      min-width: 40px;
+    }
+    th {
+      background-color: #f1f3f4;
+    }
+    .footer {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #888;
+    }
+    @media (max-width: 500px) {
+      h1 {
+        font-size: 18px;
+      }
+      button {
+        font-size: 12px;
+        padding: 8px 12px;
+      }
+      .card {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>CHINACNU STEEL 员工打卡系统</h1>
+  <div class="card">
+    <h2 id="currentDate">加载中...</h2>
+    <p>欢迎！<span id="username">示例员工</span></p>
+    <button onclick="checkIn()">📍 今日打卡</button>
+    <button onclick="exportToCSV()">📤 导出本月打卡记录</button>
+    <button onclick="exportPreviousMonth()">📤 导出上月打卡记录</button>
+    <p id="checkinStatus"></p>
+    <p id="summary"></p>
+    <h3>本月打卡记录</h3>
+    <div id="tableContainer">（加载中...）</div>
+  </div>
+  <div class="footer">数据保存于 Firebase 实时云端</div>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBWo1R1ph7QAZafYfcC1qb_FySDpnhLPXk",
+      authDomain: "attendance-8eb82.firebaseapp.com",
+      projectId: "attendance-8eb82",
+      storageBucket: "attendance-8eb82.firebasestorage.app",
+      messagingSenderId: "565429685014",
+      appId: "1:565429685014:web:0059e3a41eac408ae29e37"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const today = new Date().toISOString().split("T")[0];
+    document.getElementById("currentDate").innerText = "今天是：" + today;
+
+    let username = localStorage.getItem("employeeName");
+    if (!username) {
+      username = prompt("请输入您的姓名：");
+      if (username) {
+        localStorage.setItem("employeeName", username);
+      } else {
+        username = "匿名员工";
+      }
+    }
+    document.getElementById("username").innerText = username;
+
+    let globalRecords = {};
+    let globalUserSet = new Set();
+
+    async function checkIn() {
+      try {
+        const ref = db.collection("attendance").doc(today);
+        const doc = await ref.get();
+        if (doc.exists && doc.data()[username]) {
+          document.getElementById("checkinStatus").innerText = `⚠️ ${username} 今日已打卡，请勿重复打卡。`;
+          return;
+        }
+        await ref.set({ [username]: true }, { merge: true });
+        document.getElementById("checkinStatus").innerText = `✅ ${username} 打卡成功！`;
+        loadAttendance();
+      } catch (e) {
+        document.getElementById("checkinStatus").innerText = "❌ 打卡失败，请重试";
+        console.error(e);
+      }
+    }
+
+    // 其余函数保持不变...
+    loadAttendance();
+  </script>
+</body>
+</html>
