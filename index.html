@@ -80,6 +80,7 @@
     <button onclick="checkIn()">📍 今日打卡</button>
     <button onclick="exportToCSV()">📤 导出本月打卡记录</button>
     <button onclick="exportPreviousMonth()">📤 导出上月打卡记录</button>
+    <button onclick="exportMonthlySummary()">📊 导出本月出勤统计</button>
     <p id="checkinStatus"></p>
     <p id="summary"></p>
     <h3>本月打卡记录</h3>
@@ -133,7 +134,160 @@
       }
     }
 
-    // 其余函数保持不变...
+    async function loadAttendance() {
+      const daysInMonth = new Date().getDate();
+      const monthPrefix = today.slice(0, 8);
+      const userSet = new Set();
+      const records = {};
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateKey = monthPrefix + String(d).padStart(2, '0');
+        const doc = await db.collection("attendance").doc(dateKey).get();
+        if (doc.exists) {
+          const data = doc.data();
+          for (let user in data) {
+            userSet.add(user);
+            if (!records[user]) records[user] = {};
+            records[user][dateKey] = data[user];
+          }
+        }
+      }
+
+      globalRecords = records;
+      globalUserSet = userSet;
+
+      const userDays = records[username] || {};
+      const punchDays = Object.values(userDays).filter(v => v === true).length;
+      const fullAttendance = 26;
+      const leftDays = Math.max(0, fullAttendance - punchDays);
+      document.getElementById("summary").innerText = `📊 ${username} 本月已打卡 ${punchDays} 天，距离满勤 ${fullAttendance} 天还差 ${leftDays} 天。`;
+
+      let html = '<table><thead><tr><th>姓名</th>';
+      for (let d = 1; d <= daysInMonth; d++) {
+        html += `<th>${String(d).padStart(2, '0')}`;
+      }
+      html += '</tr></thead><tbody>';
+
+      Array.from(userSet).forEach(user => {
+        html += `<tr><td>${user}</td>`;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateKey = monthPrefix + String(d).padStart(2, '0');
+          const checked = records[user]?.[dateKey];
+          html += `<td>${checked ? '✅' : '❌'}</td>`;
+        }
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+      document.getElementById("tableContainer").innerHTML = html;
+    }
+
+    function exportToCSV() {
+      const daysInMonth = new Date().getDate();
+      const monthPrefix = today.slice(0, 8);
+      let csv = '姓名';
+      for (let d = 1; d <= daysInMonth; d++) {
+        csv += `,${String(d).padStart(2, '0')}`;
+      }
+      csv += '\n';
+
+      Array.from(globalUserSet).forEach(user => {
+        let row = user;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateKey = monthPrefix + String(d).padStart(2, '0');
+          const checked = globalRecords[user]?.[dateKey];
+          row += `,${checked ? '打卡' : ''}`;
+        }
+        csv += row + '\n';
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `打卡记录_${monthPrefix}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    async function exportPreviousMonth() {
+      const now = new Date();
+      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const year = prevMonth.getFullYear();
+      const month = String(prevMonth.getMonth() + 1).padStart(2, '0');
+      const prefix = `${year}-${month}-`;
+      const days = new Date(year, prevMonth.getMonth() + 1, 0).getDate();
+      const userSet = new Set();
+      const records = {};
+
+      for (let d = 1; d <= days; d++) {
+        const dateKey = prefix + String(d).padStart(2, '0');
+        const doc = await db.collection("attendance").doc(dateKey).get();
+        if (doc.exists) {
+          const data = doc.data();
+          for (let user in data) {
+            userSet.add(user);
+            if (!records[user]) records[user] = {};
+            records[user][dateKey] = data[user];
+          }
+        }
+      }
+
+      let csv = '姓名';
+      for (let d = 1; d <= days; d++) {
+        csv += `,${String(d).padStart(2, '0')}`;
+      }
+      csv += '\n';
+
+      Array.from(userSet).forEach(user => {
+        let row = user;
+        for (let d = 1; d <= days; d++) {
+          const dateKey = prefix + String(d).padStart(2, '0');
+          const checked = records[user]?.[dateKey];
+          row += `,${checked ? '打卡' : ''}`;
+        }
+        csv += row + '\n';
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `打卡记录_${year}-${month}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    async function exportMonthlySummary() {
+      const monthPrefix = today.slice(0, 8);
+      const daysInMonth = new Date().getDate();
+      const summary = [];
+      for (let user of globalUserSet) {
+        const userData = globalRecords[user] || {};
+        let count = 0;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateKey = monthPrefix + String(d).padStart(2, '0');
+          if (userData[dateKey]) count++;
+        }
+        const absent = 26 - count;
+        summary.push([user, count, absent, count >= 26 ? "✅ 是" : "❌ 否"]);
+      }
+      let csv = '姓名,打卡天数,缺勤天数,是否满勤\n';
+      summary.forEach(row => {
+        csv += row.join(',') + '\n';
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `本月出勤统计_${monthPrefix}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
     loadAttendance();
   </script>
 </body>
