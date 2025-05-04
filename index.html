@@ -6,6 +6,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+  <script>
+    // 一言 API 欢迎语加载逻辑
+    document.addEventListener("DOMContentLoaded", () => {
+      const welcome = document.getElementById("typewriter");
+      if (welcome) welcome.innerText = "加载中...";
+
+      fetch('https://v1.hitokoto.cn/?c=i&encode=json')
+        .then(res => res.json())
+        .then(data => {
+          const fullText = data.hitokoto + ' —— 来自『' + data.from + '』';
+          let index = 0;
+          welcome.innerText = "";
+          (function typeEffect() {
+            if (index < fullText.length) {
+              welcome.innerText += fullText.charAt(index);
+              index++;
+              setTimeout(typeEffect, 50);
+            }
+          })();
+        })
+        .catch(() => {
+          if (welcome) welcome.innerText = '欢迎进入 CHINACNU 打卡系统，请输入您的尊姓大名';
+        });
+    });
+  </script>
   <style>
     body {
       font-family: "Arial", sans-serif;
