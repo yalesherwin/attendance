@@ -90,15 +90,17 @@
     let username = "";
 
     function submitName() {
-      const name = document.getElementById("nameInput").value.trim();
-      if (!name) return alert("请输入姓名");
-      username = name;
-      document.getElementById("username").innerText = username;
-      document.getElementById("loginScreen").style.display = "none";
-      document.querySelector(".card").style.display = "block";
-      document.querySelectorAll("button").forEach(btn => btn.style.display = "inline-block");
-      document.querySelector(".footer").style.display = "block";
-      loadAttendance();
+  const name = document.getElementById("nameInput").value.trim();
+  if (!name) return alert("请输入姓名");
+  username = name;
+  document.getElementById("username").innerText = username;
+  document.getElementById("loginScreen").style.display = "none";
+  document.querySelector(".card").style.display = "block";
+  document.querySelectorAll("button").forEach(btn => btn.style.display = "inline-block");
+  document.querySelector(".footer").style.display = "block";
+  document.querySelector("h1").style.display = "block";
+  loadAttendance();
+}
     }
 
     const messages = [
