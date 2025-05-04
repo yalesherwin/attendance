@@ -87,6 +87,7 @@
     <div id="tableContainer">（加载中...）</div>
   </div>
   <div class="footer">数据保存于 Firebase 实时云端</div>
+
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyBWo1R1ph7QAZafYfcC1qb_FySDpnhLPXk",
@@ -101,20 +102,52 @@
     const db = firebase.firestore();
 
     const now = new Date();
-now.setHours(now.getHours() + 8); // 修正为北京时间（UTC+8）
-const today = now.toISOString().split("T")[0];
+    now.setHours(now.getHours() + 8); // 修正为北京时间
+    const today = now.toISOString().split("T")[0];
     document.getElementById("currentDate").innerText = "今天是：" + today;
 
-    let username = localStorage.getItem("employeeName");
-    if (!username) {
-      username = prompt("请输入您的姓名：");
-      if (username) {
-        localStorage.setItem("employeeName", username);
-      } else {
-        username = "匿名员工";
-      }
+    let username = "";
+
+    async function promptUsernameEveryTime() {
+      const mask = document.createElement("div");
+      mask.style = `
+        position: fixed; top:0; left:0; width:100%; height:100%;
+        background: rgba(0,0,0,0.4); display:flex; justify-content:center; align-items:center; z-index:9999;
+      `;
+
+      const box = document.createElement("div");
+      box.style = `
+        background:white; padding:24px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.2); text-align:center; width:90%; max-width:300px;
+      `;
+      box.innerHTML = `
+        <h3>您好，亲爱的同学～</h3>
+        <p>欢迎进入 <b>CHINACNU 打卡系统</b></p>
+        <p>请输入您的尊姓大名：</p>
+        <input id="nameInput" placeholder="请输入姓名" style="padding:10px; width:90%; border-radius:6px; border:1px solid #ccc;" />
+        <br><br>
+        <button id="submitNameBtn" style="padding:8px 16px; background-color:#1a73e8; color:white; border:none; border-radius:6px; cursor:pointer;">确定</button>
+      `;
+      mask.appendChild(box);
+      document.body.appendChild(mask);
+
+      return new Promise((resolve) => {
+        document.getElementById("submitNameBtn").onclick = () => {
+          const name = document.getElementById("nameInput").value.trim();
+          if (name) {
+            document.body.removeChild(mask);
+            resolve(name);
+          } else {
+            alert("请输入姓名！");
+          }
+        };
+      });
     }
-    document.getElementById("username").innerText = username;
+
+    promptUsernameEveryTime().then(name => {
+      username = name;
+      document.getElementById("username").innerText = username;
+      loadAttendance(); // 姓名确认后再加载数据
+    });
 
     let globalRecords = {};
     let globalUserSet = new Set();
@@ -166,7 +199,7 @@ const today = now.toISOString().split("T")[0];
 
       let html = '<table><thead><tr><th>姓名</th>';
       for (let d = 1; d <= daysInMonth; d++) {
-        html += `<th>${String(d).padStart(2, '0')}`;
+        html += `<th>${String(d).padStart(2, '0')}</th>`;
       }
       html += '</tr></thead><tbody>';
 
@@ -289,8 +322,6 @@ const today = now.toISOString().split("T")[0];
       link.click();
       document.body.removeChild(link);
     }
-
-    loadAttendance();
   </script>
 </body>
 </html>
