@@ -111,6 +111,8 @@
   "登高必自卑，行远必自迩。欢迎打卡！",
   "记录点滴成长，从打卡开始～请输入您的姓名。"
 ];
+document.getElementById("typewriter").innerHTML = "加载中...";
+
 fetch('https://v1.hitokoto.cn/?c=i&encode=json')
   .then(res => res.json())
   .then(data => {
@@ -123,6 +125,7 @@ fetch('https://v1.hitokoto.cn/?c=i&encode=json')
 
 function typeWithText(text) {
   let index = 0;
+  document.getElementById("typewriter").innerHTML = "";
   function typeEffect() {
     if (index < text.length) {
       document.getElementById("typewriter").innerHTML += text.charAt(index);
@@ -131,6 +134,10 @@ function typeWithText(text) {
     }
   }
   typeEffect();
+}
+
+// 显示按钮，防止因等待API而隐藏
+document.querySelector("button").style.display = "inline-block";
 }
 
     // 你的其余打卡逻辑函数仍有效，包括 loadAttendance() 等
