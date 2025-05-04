@@ -6,31 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-  <script>
-    // 一言 API 欢迎语加载逻辑
-    document.addEventListener("DOMContentLoaded", () => {
-      const welcome = document.getElementById("typewriter");
-      if (welcome) welcome.innerText = "加载中...";
-
-      fetch('https://v1.hitokoto.cn/?c=i&encode=json')
-        .then(res => res.json())
-        .then(data => {
-          const fullText = data.hitokoto + ' —— 来自『' + data.from + '』';
-          let index = 0;
-          welcome.innerText = "";
-          (function typeEffect() {
-            if (index < fullText.length) {
-              welcome.innerText += fullText.charAt(index);
-              index++;
-              setTimeout(typeEffect, 50);
-            }
-          })();
-        })
-        .catch(() => {
-          if (welcome) welcome.innerText = '欢迎进入 CHINACNU 打卡系统，请输入您的尊姓大名';
-        });
-    });
-  </script>
   <style>
     body {
       font-family: "Arial", sans-serif;
@@ -39,28 +14,19 @@
       padding: 10px;
       text-align: center;
     }
-    #loginScreen {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
+    h1 {
+      color: #1a73e8;
+      font-size: 20px;
+    }
+    .card {
       background: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      z-index: 999;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      max-width: 100%;
+      margin: 10px auto;
+      box-sizing: border-box;
     }
-    #typewriter {
-      font-size: 18px;
-      margin-bottom: 20px;
-      max-width: 80%;
-    }
-    input[type="text"] {
-      padding: 10px;
-      font-size: 16px;
-      width: 60%;
-      margin-bottom: 10px;
-    }
-    .card, button, table, .footer { display: none; }
     button {
       padding: 10px 16px;
       font-size: 14px;
@@ -71,15 +37,42 @@
       background-color: #1a73e8;
       color: white;
     }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      overflow-x: auto;
+      display: block;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      font-size: 12px;
+      min-width: 40px;
+    }
+    th {
+      background-color: #f1f3f4;
+    }
+    .footer {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #888;
+    }
+    @media (max-width: 500px) {
+      h1 {
+        font-size: 18px;
+      }
+      button {
+        font-size: 12px;
+        padding: 8px 12px;
+      }
+      .card {
+        padding: 12px;
+      }
+    }
   </style>
 </head>
 <body>
-  <div id="loginScreen">
-    <div id="typewriter"></div>
-    <input type="text" id="nameInput" placeholder="请输入您的尊姓大名">
-    <button id="enterBtn" onclick="submitName()" style="display:inline-block;margin-top:10px;">进入系统</button>
-  </div>
-
   <h1>CHINACNU STEEL 员工打卡系统</h1>
   <div class="card">
     <h2 id="currentDate">加载中...</h2>
@@ -94,7 +87,6 @@
     <div id="tableContainer">（加载中...）</div>
   </div>
   <div class="footer">数据保存于 Firebase 实时云端</div>
-
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyBWo1R1ph7QAZafYfcC1qb_FySDpnhLPXk",
@@ -104,72 +96,201 @@
       messagingSenderId: "565429685014",
       appId: "1:565429685014:web:0059e3a41eac408ae29e37"
     };
+
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
     const now = new Date();
-    now.setHours(now.getHours() + 8); // 修正为北京时间
-    const today = now.toISOString().split("T")[0];
+now.setHours(now.getHours() + 8); // 修正为北京时间（UTC+8）
+const today = now.toISOString().split("T")[0];
     document.getElementById("currentDate").innerText = "今天是：" + today;
 
-    let username = "";
+    let username = localStorage.getItem("employeeName");
+    if (!username) {
+      username = prompt("请输入您的姓名：");
+      if (username) {
+        localStorage.setItem("employeeName", username);
+      } else {
+        username = "匿名员工";
+      }
+    }
+    document.getElementById("username").innerText = username;
 
-    function submitName() {
-  const name = document.getElementById("nameInput").value.trim();
-  if (!name) return alert("请输入姓名");
-  username = name;
-  document.getElementById("username").innerText = username;
-  document.getElementById("loginScreen").style.display = "none";
-  document.querySelector(".card").style.display = "block";
-  document.querySelector(".footer").style.display = "block";
-  document.querySelector("h1").style.display = "block";
-  document.querySelectorAll("button").forEach(btn => {
-    if (btn.id !== "enterBtn") btn.style.display = "inline-block";
-  });
-  loadAttendance();
-}
-}
+    let globalRecords = {};
+    let globalUserSet = new Set();
+
+    async function checkIn() {
+      try {
+        const ref = db.collection("attendance").doc(today);
+        const doc = await ref.get();
+        if (doc.exists && doc.data()[username]) {
+          document.getElementById("checkinStatus").innerText = `⚠️ ${username} 今日已打卡，请勿重复打卡。`;
+          return;
+        }
+        await ref.set({ [username]: true }, { merge: true });
+        document.getElementById("checkinStatus").innerText = `✅ ${username} 打卡成功！`;
+        loadAttendance();
+      } catch (e) {
+        document.getElementById("checkinStatus").innerText = "❌ 打卡失败，请重试";
+        console.error(e);
+      }
     }
 
-    const messages = [
-  "您好，亲爱的同学～欢迎进入chinacnu打卡系统，请输入您的尊姓大名。",
-  "新的一天，从准时打卡开始～请留下您的尊姓大名。",
-  "青春不负，使命在肩。欢迎进入打卡系统！",
-  "每天进步一点点，今天也要加油哦！",
-  "登高必自卑，行远必自迩。欢迎打卡！",
-  "记录点滴成长，从打卡开始～请输入您的姓名。"
-];
-document.getElementById("typewriter").innerHTML = "加载中...";
+    async function loadAttendance() {
+      const daysInMonth = new Date().getDate();
+      const monthPrefix = today.slice(0, 8);
+      const userSet = new Set();
+      const records = {};
 
-fetch('https://v1.hitokoto.cn/?c=i&encode=json')
-  .then(res => res.json())
-  .then(data => {
-    const fullText = data.hitokoto + ' —— 来自『' + data.from + '』';
-    typeWithText(fullText);
-  })
-  .catch(() => {
-    typeWithText('您好，亲爱的同学～欢迎进入chinacnu打卡系统，请输入您的尊姓大名。');
-  });
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateKey = monthPrefix + String(d).padStart(2, '0');
+        const doc = await db.collection("attendance").doc(dateKey).get();
+        if (doc.exists) {
+          const data = doc.data();
+          for (let user in data) {
+            userSet.add(user);
+            if (!records[user]) records[user] = {};
+            records[user][dateKey] = data[user];
+          }
+        }
+      }
 
-function typeWithText(text) {
-  let index = 0;
-  document.getElementById("typewriter").innerHTML = "";
-  function typeEffect() {
-    if (index < text.length) {
-      document.getElementById("typewriter").innerHTML += text.charAt(index);
-      index++;
-      setTimeout(typeEffect, 60);
+      globalRecords = records;
+      globalUserSet = userSet;
+
+      const userDays = records[username] || {};
+      const punchDays = Object.values(userDays).filter(v => v === true).length;
+      const fullAttendance = 26;
+      const leftDays = Math.max(0, fullAttendance - punchDays);
+      document.getElementById("summary").innerText = `📊 ${username} 本月已打卡 ${punchDays} 天，距离满勤 ${fullAttendance} 天还差 ${leftDays} 天。`;
+
+      let html = '<table><thead><tr><th>姓名</th>';
+      for (let d = 1; d <= daysInMonth; d++) {
+        html += `<th>${String(d).padStart(2, '0')}`;
+      }
+      html += '</tr></thead><tbody>';
+
+      Array.from(userSet).forEach(user => {
+        html += `<tr><td>${user}</td>`;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateKey = monthPrefix + String(d).padStart(2, '0');
+          const checked = records[user]?.[dateKey];
+          html += `<td>${checked ? '✅' : '❌'}</td>`;
+        }
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+      document.getElementById("tableContainer").innerHTML = html;
     }
-  }
-  typeEffect();
-}
 
-// 显示按钮，防止因等待API而隐藏
-// 不隐藏按钮，但保留原有显示逻辑
-// // 按钮已在 HTML 中设置显示，无需强制设置
-}
+    function exportToCSV() {
+      const daysInMonth = new Date().getDate();
+      const monthPrefix = today.slice(0, 8);
+      let csv = '姓名';
+      for (let d = 1; d <= daysInMonth; d++) {
+        csv += `,${String(d).padStart(2, '0')}`;
+      }
+      csv += '\n';
 
-    // 你的其余打卡逻辑函数仍有效，包括 loadAttendance() 等
+      Array.from(globalUserSet).forEach(user => {
+        let row = user;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateKey = monthPrefix + String(d).padStart(2, '0');
+          const checked = globalRecords[user]?.[dateKey];
+          row += `,${checked ? '打卡' : ''}`;
+        }
+        csv += row + '\n';
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `打卡记录_${monthPrefix}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    async function exportPreviousMonth() {
+      const now = new Date();
+      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const year = prevMonth.getFullYear();
+      const month = String(prevMonth.getMonth() + 1).padStart(2, '0');
+      const prefix = `${year}-${month}-`;
+      const days = new Date(year, prevMonth.getMonth() + 1, 0).getDate();
+      const userSet = new Set();
+      const records = {};
+
+      for (let d = 1; d <= days; d++) {
+        const dateKey = prefix + String(d).padStart(2, '0');
+        const doc = await db.collection("attendance").doc(dateKey).get();
+        if (doc.exists) {
+          const data = doc.data();
+          for (let user in data) {
+            userSet.add(user);
+            if (!records[user]) records[user] = {};
+            records[user][dateKey] = data[user];
+          }
+        }
+      }
+
+      let csv = '姓名';
+      for (let d = 1; d <= days; d++) {
+        csv += `,${String(d).padStart(2, '0')}`;
+      }
+      csv += '\n';
+
+      Array.from(userSet).forEach(user => {
+        let row = user;
+        for (let d = 1; d <= days; d++) {
+          const dateKey = prefix + String(d).padStart(2, '0');
+          const checked = records[user]?.[dateKey];
+          row += `,${checked ? '打卡' : ''}`;
+        }
+        csv += row + '\n';
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `打卡记录_${year}-${month}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    async function exportMonthlySummary() {
+      const monthPrefix = today.slice(0, 8);
+      const daysInMonth = new Date().getDate();
+      const summary = [];
+      for (let user of globalUserSet) {
+        const userData = globalRecords[user] || {};
+        let count = 0;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateKey = monthPrefix + String(d).padStart(2, '0');
+          if (userData[dateKey]) count++;
+        }
+        const absent = 26 - count;
+        summary.push([user, count, absent, count >= 26 ? "✅ 是" : "❌ 否"]);
+      }
+      let csv = '姓名,打卡天数,缺勤天数,是否满勤\n';
+      summary.forEach(row => {
+        csv += row.join(',') + '\n';
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `本月出勤统计_${monthPrefix}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    loadAttendance();
   </script>
 </body>
 </html>
