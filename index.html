@@ -52,7 +52,7 @@
   <div id="loginScreen">
     <div id="typewriter"></div>
     <input type="text" id="nameInput" placeholder="请输入您的尊姓大名">
-    <button onclick="submitName()">进入系统</button>
+    <button id="enterBtn" onclick="submitName()">进入系统</button>
   </div>
 
   <h1>CHINACNU STEEL 员工打卡系统</h1>
@@ -96,10 +96,13 @@
   document.getElementById("username").innerText = username;
   document.getElementById("loginScreen").style.display = "none";
   document.querySelector(".card").style.display = "block";
-  document.querySelectorAll("button").forEach(btn => btn.style.display = "inline-block");
   document.querySelector(".footer").style.display = "block";
   document.querySelector("h1").style.display = "block";
+  document.querySelectorAll("button").forEach(btn => {
+    if (btn.id !== "enterBtn") btn.style.display = "inline-block";
+  });
   loadAttendance();
+}
 }
     }
 
@@ -137,7 +140,8 @@ function typeWithText(text) {
 }
 
 // 显示按钮，防止因等待API而隐藏
-document.querySelector("button").style.display = "inline-block";
+// 不隐藏按钮，但保留原有显示逻辑
+// document.querySelector("button").style.display = "inline-block";
 }
 
     // 你的其余打卡逻辑函数仍有效，包括 loadAttendance() 等
