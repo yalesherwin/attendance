@@ -7,68 +7,18 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
   <style>
-    body {
-      font-family: "Arial", sans-serif;
-      background-color: #f4f6f8;
-      margin: 0;
-      padding: 10px;
-      text-align: center;
-    }
-    h1 {
-      color: #1a73e8;
-      font-size: 20px;
-    }
-    .card {
-      background: white;
-      padding: 16px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      max-width: 100%;
-      margin: 10px auto;
-      box-sizing: border-box;
-    }
-    button {
-      padding: 10px 16px;
-      font-size: 14px;
-      margin: 8px 4px;
-      cursor: pointer;
-      border-radius: 6px;
-      border: none;
-      background-color: #1a73e8;
-      color: white;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-      overflow-x: auto;
-      display: block;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 6px;
-      font-size: 12px;
-      min-width: 40px;
-    }
-    th {
-      background-color: #f1f3f4;
-    }
-    .footer {
-      margin-top: 30px;
-      font-size: 12px;
-      color: #888;
-    }
+    body { font-family: "Arial", sans-serif; background-color: #f4f6f8; margin: 0; padding: 10px; text-align: center; }
+    h1 { color: #1a73e8; font-size: 20px; }
+    .card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 100%; margin: 10px auto; box-sizing: border-box; }
+    button { padding: 10px 16px; font-size: 14px; margin: 8px 4px; cursor: pointer; border-radius: 6px; border: none; background-color: #1a73e8; color: white; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; overflow-x: auto; display: block; }
+    th, td { border: 1px solid #ccc; padding: 6px; font-size: 12px; min-width: 40px; }
+    th { background-color: #f1f3f4; }
+    .footer { margin-top: 30px; font-size: 12px; color: #888; }
     @media (max-width: 500px) {
-      h1 {
-        font-size: 18px;
-      }
-      button {
-        font-size: 12px;
-        padding: 8px 12px;
-      }
-      .card {
-        padding: 12px;
-      }
+      h1 { font-size: 18px; }
+      button { font-size: 12px; padding: 8px 12px; }
+      .card { padding: 12px; }
     }
   </style>
 </head>
@@ -78,6 +28,8 @@
     <h2 id="currentDate">加载中...</h2>
     <p>欢迎！<span id="username">示例员工</span></p>
     <button onclick="checkIn()">📍 今日打卡</button>
+    <button onclick="makeUpPastCheckIn()">🛠 补打历史</button>
+    <button onclick="adminMakeupCheckIn()">🛡 管理员补卡</button>
     <button onclick="exportToCSV()">📤 导出本月打卡记录</button>
     <button onclick="exportPreviousMonth()">📤 导出上月打卡记录</button>
     <button onclick="exportMonthlySummary()">📊 导出本月出勤统计</button>
@@ -102,7 +54,7 @@
     const db = firebase.firestore();
 
     const now = new Date();
-    now.setHours(now.getHours() + 8); // 修正为北京时间
+    now.setHours(now.getHours() + 8);
     const today = now.toISOString().split("T")[0];
     document.getElementById("currentDate").innerText = "今天是：" + today;
 
@@ -110,15 +62,9 @@
 
     async function promptUsernameEveryTime() {
       const mask = document.createElement("div");
-      mask.style = `
-        position: fixed; top:0; left:0; width:100%; height:100%;
-        background: rgba(0,0,0,0.4); display:flex; justify-content:center; align-items:center; z-index:9999;
-      `;
-
+      mask.style = `position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.4); display:flex; justify-content:center; align-items:center; z-index:9999;`;
       const box = document.createElement("div");
-      box.style = `
-        background:white; padding:24px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.2); text-align:center; width:90%; max-width:300px;
-      `;
+      box.style = `background:white; padding:24px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.2); text-align:center; width:90%; max-width:300px;`;
       box.innerHTML = `
         <h3>您好，亲爱的同学～</h3>
         <p>欢迎进入 <b>CHINACNU 打卡系统</b></p>
@@ -129,7 +75,6 @@
       `;
       mask.appendChild(box);
       document.body.appendChild(mask);
-
       return new Promise((resolve) => {
         document.getElementById("submitNameBtn").onclick = () => {
           const name = document.getElementById("nameInput").value.trim();
@@ -146,27 +91,60 @@
     promptUsernameEveryTime().then(name => {
       username = name;
       document.getElementById("username").innerText = username;
-      loadAttendance(); // 姓名确认后再加载数据
+      loadAttendance();
     });
 
-    let globalRecords = {};
-    let globalUserSet = new Set();
-
     async function checkIn() {
-      try {
-        const ref = db.collection("attendance").doc(today);
-        const doc = await ref.get();
-        if (doc.exists && doc.data()[username]) {
-          document.getElementById("checkinStatus").innerText = `⚠️ ${username} 今日已打卡，请勿重复打卡。`;
-          return;
-        }
-        await ref.set({ [username]: true }, { merge: true });
-        document.getElementById("checkinStatus").innerText = `✅ ${username} 打卡成功！`;
-        loadAttendance();
-      } catch (e) {
-        document.getElementById("checkinStatus").innerText = "❌ 打卡失败，请重试";
-        console.error(e);
+      const ref = db.collection("attendance").doc(today);
+      const doc = await ref.get();
+      if (doc.exists && doc.data()[username]) {
+        document.getElementById("checkinStatus").innerText = `⚠️ ${username} 今日已打卡。`;
+        return;
       }
+      await ref.set({ [username]: true }, { merge: true });
+      document.getElementById("checkinStatus").innerText = `✅ ${username} 打卡成功！`;
+      loadAttendance();
+    }
+
+    async function makeUpPastCheckIn() {
+      const date = prompt("请输入要补卡的日期（格式：2025-05-01）：");
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        alert("请输入正确的日期格式，如 2025-05-01");
+        return;
+      }
+      const ref = db.collection("attendance").doc(date);
+      const doc = await ref.get();
+      const existing = doc.exists ? doc.data()[username] : null;
+      if (existing) {
+        alert(`${username} 在 ${date} 已打卡。`);
+        return;
+      }
+      await ref.set({ [username]: "补卡" }, { merge: true });
+      alert(`✅ 已成功补卡 ${date}`);
+      loadAttendance();
+    }
+
+    async function adminMakeupCheckIn() {
+      const date = prompt("请输入补卡日期（格式：2025-05-01）：");
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        alert("请输入正确的日期格式，如 2025-05-01");
+        return;
+      }
+      const name = prompt("请输入要补卡的员工姓名：");
+      if (!name || name.trim() === '') {
+        alert("请输入姓名！");
+        return;
+      }
+      const ref = db.collection("attendance").doc(date);
+      const doc = await ref.get();
+      const existing = doc.exists ? doc.data()[name] : null;
+      if (existing) {
+        alert(`${name} 在 ${date} 已打卡。`);
+        return;
+      }
+      await ref.set({ [name]: "补卡" }, { merge: true });
+      alert(`✅ 已为 ${name} 补卡 ${date}`);
+      loadAttendance();
     }
 
     async function loadAttendance() {
@@ -188,139 +166,24 @@
         }
       }
 
-      globalRecords = records;
-      globalUserSet = userSet;
-
-      const userDays = records[username] || {};
-      const punchDays = Object.values(userDays).filter(v => v === true).length;
-      const fullAttendance = 26;
-      const leftDays = Math.max(0, fullAttendance - punchDays);
-      document.getElementById("summary").innerText = `📊 ${username} 本月已打卡 ${punchDays} 天，距离满勤 ${fullAttendance} 天还差 ${leftDays} 天。`;
-
       let html = '<table><thead><tr><th>姓名</th>';
       for (let d = 1; d <= daysInMonth; d++) {
         html += `<th>${String(d).padStart(2, '0')}</th>`;
       }
       html += '</tr></thead><tbody>';
 
-      Array.from(userSet).forEach(user => {
+      userSet.forEach(user => {
         html += `<tr><td>${user}</td>`;
         for (let d = 1; d <= daysInMonth; d++) {
           const dateKey = monthPrefix + String(d).padStart(2, '0');
-          const checked = records[user]?.[dateKey];
-          html += `<td>${checked ? '✅' : '❌'}</td>`;
+          const mark = records[user]?.[dateKey];
+          html += `<td>${mark === true ? '✅' : (mark === '补卡' ? '🕒' : '❌')}</td>`;
         }
         html += '</tr>';
       });
 
       html += '</tbody></table>';
       document.getElementById("tableContainer").innerHTML = html;
-    }
-
-    function exportToCSV() {
-      const daysInMonth = new Date().getDate();
-      const monthPrefix = today.slice(0, 8);
-      let csv = '姓名';
-      for (let d = 1; d <= daysInMonth; d++) {
-        csv += `,${String(d).padStart(2, '0')}`;
-      }
-      csv += '\n';
-
-      Array.from(globalUserSet).forEach(user => {
-        let row = user;
-        for (let d = 1; d <= daysInMonth; d++) {
-          const dateKey = monthPrefix + String(d).padStart(2, '0');
-          const checked = globalRecords[user]?.[dateKey];
-          row += `,${checked ? '打卡' : ''}`;
-        }
-        csv += row + '\n';
-      });
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `打卡记录_${monthPrefix}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-
-    async function exportPreviousMonth() {
-      const now = new Date();
-      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const year = prevMonth.getFullYear();
-      const month = String(prevMonth.getMonth() + 1).padStart(2, '0');
-      const prefix = `${year}-${month}-`;
-      const days = new Date(year, prevMonth.getMonth() + 1, 0).getDate();
-      const userSet = new Set();
-      const records = {};
-
-      for (let d = 1; d <= days; d++) {
-        const dateKey = prefix + String(d).padStart(2, '0');
-        const doc = await db.collection("attendance").doc(dateKey).get();
-        if (doc.exists) {
-          const data = doc.data();
-          for (let user in data) {
-            userSet.add(user);
-            if (!records[user]) records[user] = {};
-            records[user][dateKey] = data[user];
-          }
-        }
-      }
-
-      let csv = '姓名';
-      for (let d = 1; d <= days; d++) {
-        csv += `,${String(d).padStart(2, '0')}`;
-      }
-      csv += '\n';
-
-      Array.from(userSet).forEach(user => {
-        let row = user;
-        for (let d = 1; d <= days; d++) {
-          const dateKey = prefix + String(d).padStart(2, '0');
-          const checked = records[user]?.[dateKey];
-          row += `,${checked ? '打卡' : ''}`;
-        }
-        csv += row + '\n';
-      });
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `打卡记录_${year}-${month}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-
-    async function exportMonthlySummary() {
-      const monthPrefix = today.slice(0, 8);
-      const daysInMonth = new Date().getDate();
-      const summary = [];
-      for (let user of globalUserSet) {
-        const userData = globalRecords[user] || {};
-        let count = 0;
-        for (let d = 1; d <= daysInMonth; d++) {
-          const dateKey = monthPrefix + String(d).padStart(2, '0');
-          if (userData[dateKey]) count++;
-        }
-        const absent = 26 - count;
-        summary.push([user, count, absent, count >= 26 ? "✅ 是" : "❌ 否"]);
-      }
-      let csv = '姓名,打卡天数,缺勤天数,是否满勤\n';
-      summary.forEach(row => {
-        csv += row.join(',') + '\n';
-      });
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `本月出勤统计_${monthPrefix}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     }
   </script>
 </body>
